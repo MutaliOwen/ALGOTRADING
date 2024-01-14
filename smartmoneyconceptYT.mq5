@@ -14,8 +14,16 @@
 #property indicator_type2 DRAW_ARROW
 
 input int Depth = 20; //check whether to change
-  
+
 double highs[], lows[]; //can store multiple values --- array
+
+int lastDirection = 0;
+datetime lastTimeH = 0; // store time of last high and low 
+datetime lastTimeL = 0;
+datetime prevTimeH = 0;
+datetime prevTimeL = 0;
+ 
+ 
 
 int OnInit(){
    
@@ -31,12 +39,18 @@ int OnInit(){
    PlotIndexSetDouble(0,PLOT_EMPTY_VALUE,EMPTY_VALUE); 
    PlotIndexSetDouble(1,PLOT_EMPTY_VALUE,EMPTY_VALUE); 
    
-   PlotIndexSetInteger(0,PLOT_ARROW_SHIFT,-5);
-   PlotIndexSetInteger(1,PLOT_ARROW_SHIFT,5);
+   PlotIndexSetInteger(0,PLOT_ARROW_SHIFT,-10);
+   PlotIndexSetInteger(1,PLOT_ARROW_SHIFT,10);
    return(INIT_SUCCEEDED);
  
  
   }
+  
+  
+void OnDeinit(const int reason){
+ObjectsDeleteAll(0,"SMC");
+
+}
 
 int OnCalculate(const int rates_total,
                 const int prev_calculated,
@@ -51,6 +65,8 @@ int OnCalculate(const int rates_total,
    
    ArraySetAsSeries(high,true);
    ArraySetAsSeries(low,true);
+   ArraySetAsSeries(time,true);
+   ArraySetAsSeries(close,true);
    
    
    int limit = rates_total - prev_calculated;
@@ -61,14 +77,56 @@ int OnCalculate(const int rates_total,
       highs[i] = EMPTY_VALUE;
       lows[i] = EMPTY_VALUE;
       
+      int indexLastH = iBarShift(_Symbol,PERIOD_CURRENT,lastTimeH);
+      int indexLastL = iBarShift(_Symbol,PERIOD_CURRENT,lastTimeL);
+      int indexPrevH = iBarShift(_Symbol,PERIOD_CURRENT,prevTimeH);
+      int indexPrevL = iBarShift(_Symbol,PERIOD_CURRENT,prevTimeL);
+      
+      if(indexLastH > 0 && indexLastL > 0 && indexPrevH > 0 && indexPrevL > 0){
+         if(high[indexLastH] > high[indexPrevH] && low[indexLastL] > low[indexPrevL]){
+            if(close[i] > high[indexLastH]){
+               string objName = "SMC BOS" + TimeToString(time[indexLastH]);
+               if(ObjectFind(0, objName) < 0) ObjectCreate(0,objName,OBJ_TREND,0,time[indexLastH],high[indexLastH],time[i],high[indexLastH]);
+            }
+         }
+      
+         if(high[indexLastH] < high[indexPrevH] && low[indexLastL] < low[indexPrevL]){
+            if(close[i] < low[indexLastL]){
+               string objName = "SMC BOS" + TimeToString(time[indexLastL]);
+               if(ObjectFind(0, objName) < 0) ObjectCreate(0,objName,OBJ_TREND,0,time[indexLastL],low[indexLastL],time[i],low[indexLastL],clrBlue);
+            }
+         }
+      
+      
+      }
+      
+      
       if(i+Depth == ArrayMaximum(high,i,Depth*2)){
+         if(lastDirection > 0 ){
+            //int index = iBarShift(_Symbol,PERIOD_CURRENT,lastTimeH);
+            if(high[indexLastH] < high[i+ Depth]) highs[indexLastH] = EMPTY_VALUE;
+            else continue; 
+         }
+         
          highs[i+Depth] = high[i+Depth];
+         lastDirection = 1;
+         if(indexLastH == -1 ||highs[indexLastH] != EMPTY_VALUE) prevTimeH = lastTimeH;
+         lastTimeH = time[i + Depth]; 
       
       }
 
        if(i+Depth == ArrayMinimum(low,i,Depth*2)){
+          if(lastDirection < 0 ){
+            //int index = iBarShift(_Symbol,PERIOD_CURRENT,lastTimeL);
+            if(low[indexLastL] < low[i+ Depth]) lows[indexLastL] = EMPTY_VALUE;
+            else continue; 
+         }
+         
          lows[i+Depth] = low[i+Depth];
-      
+         lastDirection = -1 ;
+         // time stamp of the last two highs and lows 
+         if(indexLastL == -1 || lows[indexLastL] != EMPTY_VALUE)prevTimeL = lastTimeL;
+         lastTimeL = time[i+Depth];
       }
 
    }
